@@ -1,80 +1,83 @@
+
 package main
 
 import (
-	"fmt"
-	"math/rand"
-
-	"sync"
-	"time"
+        "fmt"
+        "math/rand"
+        "sync"
+        "time"
 )
 
-var ch = make(chan int, 3)
-
-type fork struct{ sync.Mutex }
-
-type philosopher struct {
-	id                  int
-	leftFork, rightFork *fork
+type Philosopher struct {
+        id    int
+        left  *sync.Mutex
+        right *sync.Mutex
 }
 
-// Goes from thinking to hungry to eating and done eating then starts over.
-// Adapt the pause values to increased or decrease contentions
-// around the forks.
-func (p philosopher) eat(n int) {
-
-	say("thinking", p.id)
-	randomPause(2)
-
-	say("hungry", p.id)
-	p.leftFork.Lock()
-	p.rightFork.Lock()
-	randomPause(5)
-
-	say("eating", p.id)
-
-	p.rightFork.Unlock()
-	p.leftFork.Unlock()
-
-	say("done eating", p.id)
-
-	ch <- n
+func (p *Philosopher) eat() {
+        fmt.Printf("Philosopher %d is eating\n", p.id)
+        time.Sleep(time.Duration(rand.Intn(3)) * time.Second) // Simulate eating
+        fmt.Printf("Philosopher %d finished eating\n", p.id)
 
 }
 
-func randomPause(max int) {
-	time.Sleep(time.Millisecond * time.Duration(rand.Intn(max*1000)))
+func (p *Philosopher) think() {
+        fmt.Printf("Philosopher %d is thinking\n", p.id)
+        time.Sleep(time.Duration(rand.Intn(3)) * time.Second) // Simulate thinking
 }
 
-func say(action string, id int) {
-	fmt.Printf("Philosopher #%d is %s\n", id+1, action)
-}
+func (p *Philosopher) dine() {
+        for {
+                p.think()
 
-func init() {
-	// Random seed
-	rand.Seed(time.Now().UTC().UnixNano())
+                fmt.Printf("Philosopher %d is trying to eat\n", p.id)
+
+                // Acquire locks -  Important: Order matters to prevent deadlock!
+                p.left.Lock()
+                fmt.Printf("Philosopher %d acquired left fork\n", p.id)
+                p.right.Lock() // If this blocks, the left is held!
+                fmt.Printf("Philosopher %d acquired right fork\n", p.id)
+
+                p.eat()
+
+                // Release locks - Order doesn't matter here, but good practice to reverse.
+                p.right.Unlock()
+                fmt.Printf("Philosopher %d released right fork\n", p.id)
+                p.left.Unlock()
+                fmt.Printf("Philosopher %d released left fork\n", p.id)
+
+
+        }
 }
 
 func main() {
-	// How many philosophers and forks
-	count := 5
+        rand.Seed(time.Now().UnixNano()) // Initialize random seed
 
-	// Create forks
-	forks := make([]*fork, count)
-	for i := 0; i < count; i++ {
-		forks[i] = new(fork)
-	}
+        numPhilosophers := 5
+        forks := make([]*sync.Mutex, numPhilosophers)
+        philosophers := make([]*Philosopher, numPhilosophers)
 
-	// Create philospoher, assign them 2 forks and send them to the dining table
-	philosophers := make([]*philosopher, count)
-	for i := 0; i < count; i++ {
-		philosophers[i] = &philosopher{
-			id: i, leftFork: forks[i], rightFork: forks[(i+1)%count]}
-		for j := 0; j < 3; j++ {
-			go philosophers[i].eat(j)
-		}
-	}
+        for i := 0; i < numPhilosophers; i++ {
+                forks[i] = &sync.Mutex{}
+        }
 
-	philoEat := make(chan int, 3)
-	<-philoEat
+        for i := 0; i < numPhilosophers; i++ {
+                philosophers[i] = &Philosopher{
+                        id:    i,
+                        left:  forks[i],
+                        right: forks[(i+1)%numPhilosophers], // Circular - last philosopher's right is first fork
+                }
+        }
 
+        var wg sync.WaitGroup
+        for i := 0; i < numPhilosophers; i++ {
+                wg.Add(1)
+                go func(p *Philosopher) {
+                        defer wg.Done()
+                        p.dine()
+                }(philosophers[i])
+        }
+
+        wg.Wait()
+        fmt.Println("Dining simulation finished.")
 }
