@@ -14,6 +14,7 @@ type Philosopher struct {
         right *sync.Mutex
 }
 
+
 func (p *Philosopher) eat() {
         fmt.Printf("Philosopher %d is eating\n", p.id)
         time.Sleep(time.Duration(rand.Intn(3)) * time.Second) // Simulate eating
@@ -22,6 +23,7 @@ func (p *Philosopher) eat() {
 }
 
 func (p *Philosopher) think() {
+
         fmt.Printf("Philosopher %d is thinking\n", p.id)
         time.Sleep(time.Duration(rand.Intn(3)) * time.Second) // Simulate thinking
 }
